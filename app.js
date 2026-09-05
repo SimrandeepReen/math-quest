@@ -1,126 +1,145 @@
 (() => {
-  const KEY='mathQuestV3';
-  const old=JSON.parse(localStorage.getItem('mathQuestV2')||'{}');
-  const defaults={level:1,totalBadges:0,totalAnswered:0,totalCorrect:0,recent:[],addition:true,subtraction:true,adaptive:true,sound:true,timer:0,roundSize:8};
-  const saved=JSON.parse(localStorage.getItem(KEY)||'null');
-  let state=saved?{...defaults,...saved}:{...defaults,level:old.level||1,totalAnswered:old.totalAnswered||0,totalCorrect:old.totalCorrect||0,addition:old.addition!==false,subtraction:old.subtraction!==false,adaptive:old.adaptive!==false,timer:Number(old.timer)||0};
-  let mission=null,timerId=null,locked=false,startedAt=0,answerText='',audioCtx=null;
+  const KEY='miasPlaygroundWorldV4';
+  const legacyKeys=['mathQuestV2','mathQuestV3'];
+  const treasures=['🛴','🧸','🎈','🪁','🛝','⚽','🐰','🎨','🛹','🦄','🍦','🌟'];
+  const roomMeta={
+    home:{name:'HOME',title:'Home',decor:[['🛏️',8,42],['🪟',78,14],['🪴',70,53],['🧸',27,58],['🎒',48,58]]},
+    shop:{name:'CANDY SHOP',title:'Candy Shop',decor:[['🍭',8,18],['🍬',22,48],['🧁',72,52],['🏪',45,16],['🛒',82,55]]},
+    park:{name:'PLAYGROUND',title:'Playground',decor:[['🌳',7,25],['🛝',29,38],['⚽',66,62],['🧺',80,58],['🌼',53,68]]}
+  };
+  const activityNames={home:['Backpack Builder','Toy Tidy'],shop:['Candy Basket','Share the Treats'],park:['Score the Goals','Picnic Helper']};
+  const defaults={level:1,coins:0,treasures:[],adventures:0,tasks:{home:false,shop:false,park:false},sound:true,adaptive:true,equations:true,totalAnswered:0,totalCorrect:0,recent:[],lastActivities:{},adventureSeed:Date.now()};
+  let state=loadState(),room=null,current=null,answerText='',audioCtx=null,drag=null,freePlay=false;
   const $=id=>document.getElementById(id);
-  const screens=['homeScreen','gameScreen','completeScreen','settingsScreen'];
-  const stages=[
-    {name:'Home',icon:'🏠',object:'🎒'},
-    {name:'Candy Shop',icon:'🍬',object:'🍬'},
-    {name:'Bus Stop',icon:'🚌',object:'🧒'},
-    {name:'Park Path',icon:'🌳',object:'🌼'},
-    {name:'Playground',icon:'⚽',object:'⭐'},
-    {name:'Treasure',icon:'🏆',object:'🔑'}
-  ];
+  const screens=['worldScreen','roomScreen','treasureScreen','settingsScreen'];
+
+  function loadState(){
+    try{const raw=localStorage.getItem(KEY);if(raw)return {...defaults,...JSON.parse(raw)};}catch{}
+    let migrated={...defaults};
+    for(const k of legacyKeys){try{const v=JSON.parse(localStorage.getItem(k)||'null');if(v){migrated.level=Math.max(1,Math.min(3,v.level||1));migrated.totalAnswered=v.totalAnswered||0;migrated.totalCorrect=v.totalCorrect||0;break;}}catch{}}
+    return migrated;
+  }
   function save(){localStorage.setItem(KEY,JSON.stringify(state));}
-  function show(id){screens.forEach(s=>$(s).classList.toggle('active',s===id));}
-  function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
-  function randInt(a,b){return Math.floor(Math.random()*(b-a+1))+a;}
-  function choice(a){return a[Math.floor(Math.random()*a.length)];}
-  function levelInfo(l=state.level){return [{name:'Two-Digit Builder'},{name:'Crossing Ten'},{name:'Mixed Three-Step'}][clamp(l,1,3)-1];}
-  function updateHome(){
-    $('homeLevel').textContent=`Level ${state.level} · ${levelInfo().name}`;
-    $('homeBadges').textContent=`🏅 ${state.totalBadges} mission${state.totalBadges===1?'':'s'}`;
-    $('homeAccuracy').textContent=state.totalAnswered?`${Math.round(100*state.totalCorrect/state.totalAnswered)}% accuracy`:'No missions yet';
-  }
+  function show(id){screens.forEach(s=>$(s).classList.toggle('active',s===id));window.scrollTo({top:0,behavior:'instant'});}
+  const rand=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+  const pick=a=>a[Math.floor(Math.random()*a.length)];
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function levelText(l=state.level){return ['Two-digit ± single-digit','Crossing ten','Two-step mixed + and −'][clamp(l,1,3)-1];}
+
   function ensureAudio(){if(!audioCtx){const C=window.AudioContext||window.webkitAudioContext;if(C)audioCtx=new C();}if(audioCtx?.state==='suspended')audioCtx.resume();}
-  function tone(freq,duration,delay=0,type='sine',volume=.045){if(!state.sound)return;ensureAudio();if(!audioCtx)return;const now=audioCtx.currentTime+delay;const osc=audioCtx.createOscillator();const gain=audioCtx.createGain();osc.type=type;osc.frequency.setValueAtTime(freq,now);gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(volume,now+.015);gain.gain.exponentialRampToValueAtTime(.001,now+duration);osc.connect(gain);gain.connect(audioCtx.destination);osc.start(now);osc.stop(now+duration+.03);}
-  function successSound(){tone(523,.11,0,'sine',.045);tone(659,.13,.08,'sine',.045);tone(784,.16,.17,'sine',.05);}
-  function retrySound(){tone(330,.12,0,'sine',.025);tone(294,.14,.08,'sine',.02);}
-  function missionSound(){tone(523,.15,0,'triangle',.05);tone(659,.15,.12,'triangle',.05);tone(784,.18,.24,'triangle',.055);tone(1047,.28,.38,'triangle',.06);}
+  function tone(f,d,t=0,type='sine',vol=.04){if(!state.sound)return;ensureAudio();if(!audioCtx)return;const n=audioCtx.currentTime+t,o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type;o.frequency.setValueAtTime(f,n);g.gain.setValueAtTime(.001,n);g.gain.linearRampToValueAtTime(vol,n+.015);g.gain.exponentialRampToValueAtTime(.001,n+d);o.connect(g);g.connect(audioCtx.destination);o.start(n);o.stop(n+d+.02);}
+  function goodSound(){tone(523,.1);tone(659,.12,.08);tone(784,.16,.17);}
+  function coinSound(){tone(880,.07,0,'triangle',.035);tone(1175,.1,.07,'triangle',.04);}
+  function treasureSound(){[523,659,784,1047].forEach((f,i)=>tone(f,.18,i*.12,'triangle',.05));}
+  function sparks(){for(let i=0;i<12;i++){const e=document.createElement('div');e.className='spark';e.textContent=pick(['✨','⭐','🎉']);e.style.left=(45+Math.random()*10)+'vw';e.style.top=(45+Math.random()*10)+'vh';e.style.setProperty('--dx',(Math.random()*220-110)+'px');e.style.setProperty('--dy',(Math.random()*-180-30)+'px');document.body.appendChild(e);setTimeout(()=>e.remove(),900);}}
 
-  function makeQuestion(){
-    const level=clamp(state.level,1,3),allowAdd=state.addition,allowSub=state.subtraction;
-    if(level===1){
-      const ops=[];if(allowAdd)ops.push('+');if(allowSub)ops.push('-');if(!ops.length)ops.push('+');const op=choice(ops);
-      if(op==='+'){const a=randInt(10,19),b=randInt(1,Math.min(9,20-a));return {a,b,ops:['+'],answer:a+b};}
-      const a=randInt(11,20),b=randInt(1,Math.min(9,a-10));return {a,b,ops:['-'],answer:a-b};
+  function updateHud(){
+    $('coinHud').textContent=`🪙 ${state.coins}`;
+    const done=Object.values(state.tasks).filter(Boolean).length;$('adventureHud').textContent=`🗺️ ${done}/3`;
+    ['home','shop','park'].forEach(r=>$(r+'TaskMark').textContent=state.tasks[r]?'✓':'○');
+    $('collection').innerHTML=state.treasures.length?state.treasures.map(x=>`<div class="collect-item">${x}</div>`).join(''):'<span>No treasures yet — finish an adventure!</span>';
+    $('levelDescription').textContent=levelText();$('levelSelect').value=String(state.level);
+  }
+  function world(){room=null;freePlay=false;updateHud();show('worldScreen');}
+  function newAdventure(){state.tasks={home:false,shop:false,park:false};state.adventureSeed=Date.now();save();updateHud();$('adventureTitle').textContent='A fresh adventure!';$('adventureText').textContent='Help once at home, once at the shop and once at the playground to unlock a treasure.';}
+
+  function renderScene(r){const meta=roomMeta[r];$('roomScene').className='room-scene '+r;let html=meta.decor.map(([e,x,y])=>`<span class="scene-decor" style="left:${x}%;top:${y}%">${e}</span>`).join('');state.treasures.slice(-3).forEach((e,i)=>{html+=`<span class="scene-decor" style="left:${42+i*10}%;top:62%;font-size:42px">${e}</span>`;});$('roomScene').innerHTML=html;}
+  function enterRoom(r){room=r;freePlay=false;const meta=roomMeta[r];$('roomName').textContent=meta.name;$('roomTitle').textContent=meta.title;renderScene(r);show('roomScreen');startActivity(r);}
+
+  function mathProblem(){
+    const l=clamp(state.level,1,3);
+    if(l===1){
+      if(Math.random()<.5){const a=rand(10,18),b=rand(1,Math.min(7,20-a));return {steps:[{op:'+',amount:b}],start:a,answer:a+b};}
+      const a=rand(12,20),b=rand(1,Math.min(8,a-10));return {steps:[{op:'-',amount:b}],start:a,answer:a-b};
     }
-    if(level===2){
-      let mode;if(allowAdd&&allowSub)mode=choice(['crossSub','inverseAdd']);else mode=allowSub?'crossSub':'inverseAdd';
-      if(mode==='crossSub'){const answer=randInt(1,9),minB=Math.max(1,10-answer),maxB=Math.min(9,20-answer),b=randInt(minB,maxB),a=answer+b;return {a,b,ops:['-'],answer};}
-      const a=randInt(1,9),minB=Math.max(1,10-a),b=randInt(minB,9);return {a,b,ops:['+'],answer:a+b};
+    if(l===2){
+      if(Math.random()<.5){const ans=rand(2,9),b=rand(Math.max(1,10-ans),Math.min(9,20-ans)),a=ans+b;return {steps:[{op:'-',amount:b}],start:a,answer:ans};}
+      const a=rand(2,9),b=rand(Math.max(1,10-a),9);return {steps:[{op:'+',amount:b}],start:a,answer:a+b};
     }
-    let pairs=[];if(allowAdd&&allowSub)pairs=['++','+-','-+','--'];else if(allowAdd)pairs=['++'];else pairs=['--'];
-    for(let tries=0;tries<250;tries++){
-      const pair=choice(pairs),a=randInt(5,20),b=randInt(1,9),c=randInt(1,9);const first=pair[0]==='+'?a+b:a-b;if(first<0||first>20)continue;const answer=pair[1]==='+'?first+c:first-c;if(answer<0||answer>20)continue;return {a,b,c,ops:[pair[0],pair[1]],answer};
+    for(let i=0;i<100;i++){
+      const a=rand(7,18),op1=pick(['+','-']),op2=pick(['+','-']),b=rand(2,7),c=rand(2,7);const mid=op1==='+'?a+b:a-b,ans=op2==='+'?mid+c:mid-c;if(mid>=0&&mid<=20&&ans>=0&&ans<=20)return {steps:[{op:op1,amount:b},{op:op2,amount:c}],start:a,answer:ans};
     }
-    return {a:14,b:3,c:5,ops:['+','-'],answer:12};
+    return {steps:[{op:'+',amount:3},{op:'-',amount:5}],start:14,answer:12};
   }
 
-  function currentStageIndex(index=mission?.index||0){return Math.min(stages.length-1,Math.floor(index*(stages.length-1)/Math.max(1,state.roundSize-1)));}
-  function storyFor(q,stageIndex){
-    const s=stages[stageIndex],op1=q.ops[0],op2=q.ops[1];
-    if(stageIndex===0){
-      if(!op2){return op1==='+'?{title:'Pack the backpack',scene:'🎒',story:`Mia packed ${q.a} stickers and adds ${q.b} more.`,ask:'How many stickers are in the backpack now?',object:'⭐'}:{title:'Pack the backpack',scene:'🎒',story:`Mia has ${q.a} stickers and gives ${q.b} to a friend before leaving.`,ask:'How many stickers are left?',object:'⭐'};}
-      return {title:'Pack the backpack',scene:'🎒',story:`Mia starts with ${q.a} stickers, ${op1==='+'?'adds':'gives away'} ${q.b}, then ${op2==='+'?'adds':'gives away'} ${q.c}.`,ask:'How many stickers does she have now?',object:'⭐'};
-    }
-    if(stageIndex===1){
-      if(!op2)return op1==='+'?{title:s.name,scene:'🍬',story:`There are ${q.a} candies in Mia’s bag. The shopkeeper adds ${q.b} more.`,ask:'How many candies are there now?',object:'🍬'}:{title:s.name,scene:'🍬',story:`Mia has ${q.a} candies and shares ${q.b} with her friends.`,ask:'How many candies are left?',object:'🍬'};
-      return {title:s.name,scene:'🍬',story:`Mia has ${q.a} candies, ${op1==='+'?'gets':'shares'} ${q.b}${op1==='+'?' more':''}, then ${op2==='+'?'gets':'shares'} ${q.c}${op2==='+'?' more':''}.`,ask:'How many candies does she have now?',object:'🍬'};
-    }
-    if(stageIndex===2){
-      if(!op2)return op1==='+'?{title:s.name,scene:'🚌',story:`There are ${q.a} children on the bus. ${q.b} more get on.`,ask:'How many children are on the bus now?',object:'🧒'}:{title:s.name,scene:'🚌',story:`There are ${q.a} children on the bus. ${q.b} get off.`,ask:'How many children stay on the bus?',object:'🧒'};
-      return {title:s.name,scene:'🚌',story:`The bus starts with ${q.a} children. ${q.b} ${op1==='+'?'get on':'get off'}, then ${q.c} ${op2==='+'?'get on':'get off'}.`,ask:'How many children are on the bus now?',object:'🧒'};
-    }
-    if(stageIndex===3){
-      if(!op2)return op1==='+'?{title:s.name,scene:'🌳',story:`Mia spots ${q.a} flowers, then finds ${q.b} more along the path.`,ask:'How many flowers has she spotted?',object:'🌼'}:{title:s.name,scene:'🌳',story:`Mia collected ${q.a} flowers and gives ${q.b} to her friends.`,ask:'How many flowers does she still have?',object:'🌼'};
-      return {title:s.name,scene:'🌳',story:`Mia has ${q.a} flowers, ${op1==='+'?'finds':'gives away'} ${q.b}, then ${op2==='+'?'finds':'gives away'} ${q.c}.`,ask:'How many flowers does she have now?',object:'🌼'};
-    }
-    if(stageIndex===4){
-      if(!op2)return op1==='+'?{title:s.name,scene:'⚽',story:`Mia’s team has ${q.a} points and scores ${q.b} more.`,ask:'What is the team’s score now?',object:'⭐'}:{title:s.name,scene:'⚽',story:`Mia’s team has ${q.a} points and spends ${q.b} points on a bonus move.`,ask:'How many points remain?',object:'⭐'};
-      return {title:s.name,scene:'⚽',story:`The team starts with ${q.a} points, ${op1==='+'?'scores':'uses'} ${q.b}, then ${op2==='+'?'scores':'uses'} ${q.c}.`,ask:'What is the final score?',object:'⭐'};
-    }
-    if(!op2)return op1==='+'?{title:s.name,scene:'🏆',story:`Mia has ${q.a} treasure keys and finds ${q.b} more.`,ask:'How many keys does she have?',object:'🔑'}:{title:s.name,scene:'🏆',story:`Mia has ${q.a} treasure keys and uses ${q.b} to open a gate.`,ask:'How many keys are left?',object:'🔑'};
-    return {title:s.name,scene:'🏆',story:`Mia starts with ${q.a} keys, ${op1==='+'?'finds':'uses'} ${q.b}, then ${op2==='+'?'finds':'uses'} ${q.c}.`,ask:'How many keys does she have at the end?',object:'🔑'};
+  function chooseActivity(r){const names=activityNames[r],last=state.lastActivities[r];let options=names.filter(x=>x!==last);if(!options.length)options=names;const name=pick(options);state.lastActivities[r]=name;save();return name;}
+  function activityConfig(r,name,p){
+    const plus=p.steps[0].op==='+';
+    if(r==='home'&&name==='Backpack Builder')return {emoji:'🍎',sourceLabel:plus?'Snack tray':'Backpack',targetLabel:plus?'Backpack':'Friend',title:'Pack for the day',prompt:plus?`Mia already has ${p.start} snack pieces. Add ${p.steps[0].amount} more to her backpack.`:`Mia has ${p.start} snack pieces. Give ${p.steps[0].amount} to her friend before leaving.`,verb:plus?'add':'remove'};
+    if(r==='home')return {emoji:'🧸',sourceLabel:plus?'Toy shelf':'Toy box',targetLabel:plus?'Toy box':'Play mat',title:'Tidy the toys',prompt:plus?`There are ${p.start} toys in the box. Put ${p.steps[0].amount} more away.`:`There are ${p.start} toys in the box. Take ${p.steps[0].amount} out for playtime.`,verb:plus?'add':'remove'};
+    if(r==='shop'&&name==='Candy Basket')return {emoji:'🍬',sourceLabel:plus?'Candy shelf':'Basket',targetLabel:plus?'Basket':'Share bag',title:'Fill the candy basket',prompt:plus?`The basket has ${p.start} candies. Choose ${p.steps[0].amount} more.`:`The basket has ${p.start} candies. Move ${p.steps[0].amount} into the share bag.`,verb:plus?'add':'remove'};
+    if(r==='shop')return {emoji:'🍓',sourceLabel:plus?'Treat counter':'Mia’s bag',targetLabel:plus?'Mia’s bag':'Friend’s plate',title:'Share the treats',prompt:plus?`Mia has ${p.start} treats. The shopkeeper gives her ${p.steps[0].amount} more.`:`Mia has ${p.start} treats. Share ${p.steps[0].amount} with a friend.`,verb:plus?'add':'remove'};
+    if(r==='park'&&name==='Score the Goals')return {emoji:'⚽',sourceLabel:plus?'Ball rack':'Score board',targetLabel:plus?'Goal':'Bonus box',title:'Score the goals',prompt:plus?`Mia’s team has ${p.start} points. Score ${p.steps[0].amount} more goals.`:`Mia’s team has ${p.start} points. Use ${p.steps[0].amount} points for a super move.`,verb:plus?'add':'remove'};
+    return {emoji:'🧁',sourceLabel:plus?'Picnic basket':'Picnic plate',targetLabel:plus?'Picnic plate':'Friend’s plate',title:'Set up the picnic',prompt:plus?`There are ${p.start} snacks on the picnic plate. Add ${p.steps[0].amount} more.`:`There are ${p.start} snacks. Give ${p.steps[0].amount} to friends.`,verb:plus?'add':'remove'};
   }
-  function equation(q){return q.ops.length===1?`${q.a} ${q.ops[0]==='+'?'+':'−'} ${q.b} = ?`:`${q.a} ${q.ops[0]==='+'?'+':'−'} ${q.b} ${q.ops[1]==='+'?'+':'−'} ${q.c} = ?`;}
-  function renderObjects(q,obj){const count=Math.min(20,q.a);$('objects').innerHTML=Array.from({length:count},()=>`<span>${obj}</span>`).join('');}
-  function renderJourney(){
-    const idx=currentStageIndex();const progress=100*mission.index/state.roundSize;let html=`<div class="journey-fill" style="width:${Math.max(0,Math.min(86,progress*.86))}%"></div>`;
-    html+=stages.map((s,i)=>`<div class="stop ${i<idx?'done':''} ${i===idx?'active':''}"><div class="bubble">${s.icon}</div><span>${s.name}</span></div>`).join('');$('journey').innerHTML=html;
+
+  function startActivity(r){
+    current={room:r,name:chooseActivity(r),problem:mathProblem(),stepIndex:0,moves:0,mistakes:0,answered:false};
+    const cfg=activityConfig(r,current.name,current.problem);current.cfg=cfg;$('activityTitle').textContent=cfg.title;$('activityPrompt').textContent=cfg.prompt;$('feedback').textContent='';$('feedback').className='feedback';$('answerPanel').classList.add('hidden');answerText='';renderManipulation();
   }
-  function buildKeypad(){
-    const box=$('keypad');box.innerHTML='';[1,2,3,4,5,6,7,8,9,0].forEach(n=>{const b=document.createElement('button');b.className='key';b.textContent=n;b.onclick=()=>enterDigit(n);box.appendChild(b)});
-    const del=document.createElement('button');del.className='key action';del.textContent='⌫';del.onclick=backspace;box.appendChild(del);
-    const go=document.createElement('button');go.className='key go';go.textContent='Check';go.onclick=checkAnswer;box.appendChild(go);
+  function renderManipulation(){
+    const p=current.problem,step=p.steps[current.stepIndex],cfg=current.cfg;current.moves=0;
+    const isAdd=step.op==='+';const baseCount=current.stepIndex===0?p.start:(p.steps[0].op==='+'?p.start+p.steps[0].amount:p.start-p.steps[0].amount);
+    const leftCount=isAdd?step.amount:baseCount;const rightCount=isAdd?baseCount:0;
+    const sourceLabel=isAdd?cfg.sourceLabel:cfg.sourceLabel,targetLabel=isAdd?cfg.targetLabel:cfg.targetLabel;
+    $('activityArea').innerHTML=`
+      <div class="play-zone source-zone drop-zone" data-zone="source"><div class="zone-title"><span>${sourceLabel}</span><span class="counter-badge" id="sourceCount">${leftCount}</span></div><div id="sourceTokens" class="token-grid"></div><div class="instruction-chip">${isAdd?'Drag '+step.amount+' over →':'Drag '+step.amount+' out →'}</div></div>
+      <div class="play-zone target-zone drop-zone" data-zone="target"><div class="zone-title"><span>${targetLabel}</span><span class="counter-badge" id="targetCount">${rightCount}</span></div><div id="targetTokens" class="token-grid"></div></div>`;
+    const src=$('sourceTokens'),tgt=$('targetTokens');
+    if(isAdd){for(let i=0;i<step.amount;i++)src.appendChild(token(cfg.emoji,'source'));for(let i=0;i<baseCount;i++)tgt.appendChild(token(cfg.emoji,'target',false));}
+    else{for(let i=0;i<baseCount;i++)src.appendChild(token(cfg.emoji,'source'));}
+    bindDropZones();
   }
-  function enterDigit(n){if(locked)return;ensureAudio();if(answerText.length>=2)return;answerText+=String(n);renderAnswer();}
-  function backspace(){if(locked)return;answerText=answerText.slice(0,-1);renderAnswer();}
-  function renderAnswer(){const el=$('answerDisplay');el.className='answer-display'+(answerText?'':' empty');el.textContent=answerText||'Your answer';}
-  function showHint(){if(!mission?.q)return;$('hint').classList.add('show');$('hintEquation').textContent=equation(mission.q);renderObjects(mission.q,mission.story.object);}
-  function startMission(){clearInterval(timerId);mission={index:0,correct:0,pieces:0,attempts:0,responses:[]};locked=false;show('gameScreen');buildKeypad();nextQuestion();}
-  function nextQuestion(){
-    clearInterval(timerId);locked=false;answerText='';renderAnswer();$('feedback').textContent='';$('feedback').className='feedback';$('hint').classList.remove('show');
-    if(mission.index>=state.roundSize){finishMission();return;}
-    const q=makeQuestion(),stageIdx=currentStageIndex(mission.index),story=storyFor(q,stageIdx);mission.q=q;mission.story=story;mission.attempts=0;startedAt=performance.now();
-    $('scene').textContent=story.scene;$('storyTitle').textContent=story.title;$('story').textContent=story.story;$('ask').textContent=story.ask;$('levelTag').textContent=`Level ${state.level} · ${levelInfo().name}`;
-    $('progressBar').style.width=`${100*mission.index/state.roundSize}%`;$('scoreText').textContent=`🧩 ${mission.pieces}`;renderJourney();startTimer();
+  function token(emoji,zone,draggable=true){const e=document.createElement('div');e.className='token';e.textContent=emoji;e.dataset.zone=zone;if(draggable){e.addEventListener('pointerdown',beginDrag);}else{e.style.cursor='default';}return e;}
+  function beginDrag(ev){
+    if(freePlay)return;ensureAudio();const el=ev.currentTarget;
+    const ghost=el.cloneNode(true);ghost.classList.remove('dragging');ghost.style.position='fixed';ghost.style.zIndex='120';ghost.style.pointerEvents='none';ghost.style.width='58px';ghost.style.height='58px';ghost.style.margin='0';ghost.style.transform='translate(-50%,-50%) scale(1.08)';ghost.style.left=ev.clientX+'px';ghost.style.top=ev.clientY+'px';ghost.style.boxShadow='0 14px 30px rgba(30,50,80,.22)';document.body.appendChild(ghost);
+    drag={el,origin:el.parentElement,from:el.dataset.zone,pid:ev.pointerId,ghost};el.classList.add('dragging');el.setPointerCapture?.(ev.pointerId);
+    const move=e=>{if(drag?.ghost){drag.ghost.style.left=e.clientX+'px';drag.ghost.style.top=e.clientY+'px';document.querySelectorAll('.drop-zone').forEach(z=>z.classList.toggle('drop-highlight',!!document.elementFromPoint(e.clientX,e.clientY)?.closest('.drop-zone')&&document.elementFromPoint(e.clientX,e.clientY)?.closest('.drop-zone')===z));}};
+    drag.move=move;el.addEventListener('pointermove',move);el.addEventListener('pointerup',endDrag,{once:true});el.addEventListener('pointercancel',cancelDrag,{once:true});
   }
-  function startTimer(){const el=$('timer');clearInterval(timerId);if(!state.timer){el.textContent='';return;}let left=state.timer;el.textContent=`⏱ ${left}s`;el.className='timer';timerId=setInterval(()=>{left--;el.textContent=`⏱ ${left}s`;el.classList.toggle('urgent',left<=5);if(left<=0){clearInterval(timerId);handleWrong(true);}},1000);}
-  function checkAnswer(){if(locked||!answerText)return;ensureAudio();const value=Number(answerText);if(value===mission.q.answer)handleCorrect();else handleWrong(false);}
-  function handleCorrect(){
-    if(locked)return;locked=true;clearInterval(timerId);const firstTry=mission.attempts===0;mission.correct++;mission.pieces++;state.totalCorrect++;state.totalAnswered++;state.recent.push(1);if(state.recent.length>10)state.recent.shift();mission.responses.push({correct:true,firstTry,ms:performance.now()-startedAt});save();
-    const el=$('answerDisplay');el.className='answer-display good';el.textContent=mission.q.answer;$('feedback').textContent=firstTry?'Yes! The path is open!':'You got it!';$('feedback').className='feedback good';successSound();mission.index++;$('progressBar').style.width=`${100*mission.index/state.roundSize}%`;$('scoreText').textContent=`🧩 ${mission.pieces}`;setTimeout(nextQuestion,850);
+  function endDrag(ev){if(!drag)return;const d=drag,el=d.el;el.classList.remove('dragging');el.removeEventListener('pointermove',d.move);d.ghost?.remove();document.querySelectorAll('.drop-zone').forEach(z=>z.classList.remove('drop-highlight'));const hit=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('.drop-zone');drag=null;if(hit&&hit.dataset.zone!==d.from)performMove(hit.dataset.zone);}
+  function cancelDrag(){if(!drag)return;drag.el.classList.remove('dragging');drag.el.removeEventListener('pointermove',drag.move);drag.ghost?.remove();document.querySelectorAll('.drop-zone').forEach(z=>z.classList.remove('drop-highlight'));drag=null;}
+  function bindDropZones(){document.querySelectorAll('.drop-zone').forEach(z=>{z.addEventListener('pointerenter',()=>z.classList.add('drop-highlight'));z.addEventListener('pointerleave',()=>z.classList.remove('drop-highlight'));});}
+  function performMove(to){
+    const step=current.problem.steps[current.stepIndex],isAdd=step.op==='+';if((isAdd&&to!=='target')||(!isAdd&&to!=='target'))return;
+    if(current.moves>=step.amount)return;
+    const src=$('sourceTokens'),tgt=$('targetTokens');let el=src.querySelector('.token');if(!el)return;src.removeChild(el);el.dataset.zone='target';el.removeEventListener('pointerdown',beginDrag);el.style.cursor='default';tgt.appendChild(el);current.moves++;updateCounts();coinSound();
+    if(current.moves===step.amount)setTimeout(manipulationComplete,350);
   }
-  function handleWrong(timedOut=false){
-    if(locked)return;clearInterval(timerId);mission.attempts++;retrySound();
-    if(mission.attempts===1&&!timedOut){state.totalAnswered++;state.recent.push(0);if(state.recent.length>10)state.recent.shift();save();$('answerDisplay').className='answer-display bad';$('feedback').textContent='Not quite — use the hint and try once more.';$('feedback').className='feedback bad';showHint();setTimeout(()=>{answerText='';renderAnswer();startTimer();},650);return;}
-    locked=true;if(timedOut){state.totalAnswered++;state.recent.push(0);if(state.recent.length>10)state.recent.shift();save();}
-    showHint();$('answerDisplay').className='answer-display bad';$('answerDisplay').textContent=mission.q.answer;$('feedback').textContent=`The answer is ${mission.q.answer}. We’ll keep moving.`;$('feedback').className='feedback bad';mission.responses.push({correct:false,ms:performance.now()-startedAt});mission.index++;setTimeout(nextQuestion,1350);
+  function updateCounts(){$('sourceCount').textContent=$('sourceTokens').children.length;$('targetCount').textContent=$('targetTokens').children.length;}
+  function manipulationComplete(){
+    if(current.stepIndex<current.problem.steps.length-1){current.stepIndex++;const s=current.problem.steps[current.stepIndex];current.cfg={...current.cfg,prompt:`Great. Now ${s.op==='+'?'add':'move away'} ${s.amount} more.`};$('activityPrompt').textContent=current.cfg.prompt;renderManipulation();return;}
+    showAnswer();
   }
-  function adapt(){if(!state.adaptive||state.recent.length<8)return null;const acc=state.recent.reduce((a,b)=>a+b,0)/state.recent.length,before=state.level;if(acc>=.85&&state.level<3)state.level++;else if(acc<=.55&&state.level>1)state.level--;if(state.level!==before){state.recent=[];return state.level>before?'up':'down';}return null;}
-  function finishMission(){clearInterval(timerId);state.totalBadges++;const shift=adapt();save();missionSound();let msg=`You solved ${mission.correct} of ${state.roundSize} problems without needing the answer and collected ${mission.pieces} path piece${mission.pieces===1?'':'s'}.`;
-    if(shift==='up')msg+=` Next mission unlocks Level ${state.level}: ${levelInfo().name}.`;if(shift==='down')msg+=` Next mission gives a little more practice at Level ${state.level}.`;$('completeText').textContent=msg;updateHome();show('completeScreen');}
-  function syncSettings(){$('soundToggle').classList.toggle('on',state.sound);$('addToggle').classList.toggle('on',state.addition);$('subToggle').classList.toggle('on',state.subtraction);$('adaptiveToggle').classList.toggle('on',state.adaptive);$('timerSelect').value=String(state.timer);$('roundSelect').value=String(state.roundSize);}
-  function toggle(key,id){state[key]=!state[key];$(id).classList.toggle('on',state[key]);if(!state.addition&&!state.subtraction){state.addition=true;$('addToggle').classList.add('on');}}
-  $('startBtn').onclick=startMission;$('againBtn').onclick=startMission;$('homeBtn').onclick=()=>{updateHome();show('homeScreen')};$('settingsBtn').onclick=()=>{syncSettings();show('settingsScreen')};$('hintBtn').onclick=showHint;
-  $('soundToggle').onclick=()=>{toggle('sound','soundToggle');if(state.sound)successSound();};$('addToggle').onclick=()=>toggle('addition','addToggle');$('subToggle').onclick=()=>toggle('subtraction','subToggle');$('adaptiveToggle').onclick=()=>toggle('adaptive','adaptiveToggle');
-  $('saveSettingsBtn').onclick=()=>{state.timer=Number($('timerSelect').value);state.roundSize=Number($('roundSelect').value);save();updateHome();show('homeScreen')};
-  $('resetBtn').onclick=()=>{if(confirm('Reset all Math Quest progress?')){state={...defaults};save();syncSettings();updateHome();}};
-  updateHome();
-  if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}
+  function showAnswer(){current.answered=true;$('answerQuestion').textContent='How many are there now?';$('answerHintText').textContent='Use the number buttons — no guessing choices.';$('answerPanel').classList.remove('hidden');answerText='';renderAnswer();buildKeypad();}
+  function buildKeypad(){const box=$('keypad');box.innerHTML='';[0,1,2,3,4,5,6,7,8,9].forEach(n=>{const b=document.createElement('button');b.className='key';b.textContent=n;b.onclick=()=>{if(answerText.length<2){answerText+=n;renderAnswer();}};box.appendChild(b)});const del=document.createElement('button');del.className='key';del.textContent='⌫';del.onclick=()=>{answerText=answerText.slice(0,-1);renderAnswer();};box.appendChild(del);const go=document.createElement('button');go.className='key go';go.textContent='Check';go.onclick=checkAnswer;box.appendChild(go);}
+  function renderAnswer(){$('answerDisplay').textContent=answerText||'?';}
+  function equation(){const p=current.problem;let s=String(p.start);p.steps.forEach(x=>s+=` ${x.op==='+'?'+':'−'} ${x.amount}`);return s+' = ?';}
+  function checkAnswer(){if(!answerText)return;ensureAudio();const ok=Number(answerText)===current.problem.answer;state.totalAnswered++;if(ok){state.totalCorrect++;state.recent.push(1);completeActivity();}else{state.recent.push(0);current.mistakes++;$('feedback').textContent='Almost — look at the objects and try again.';$('feedback').className='feedback bad';if(state.equations)$('answerHintText').textContent='Hint: '+equation();answerText='';renderAnswer();tone(294,.12,0,'sine',.02);}if(state.recent.length>12)state.recent.shift();save();}
+  function completeActivity(){
+    goodSound();sparks();state.coins+=3;state.tasks[room]=true;adapt();save();$('feedback').textContent='You did it! +3 coins';$('feedback').className='feedback good';updateHud();setTimeout(()=>{if(Object.values(state.tasks).every(Boolean))show('treasureScreen');else world();},950);
+  }
+  function adapt(){if(!state.adaptive||state.recent.length<8)return;const a=state.recent.reduce((x,y)=>x+y,0)/state.recent.length;if(a>=.85&&state.level<3){state.level++;state.recent=[];}else if(a<=.5&&state.level>1){state.level--;state.recent=[];}}
+
+  function showHelp(){if(freePlay){$('feedback').textContent='Drag your toys anywhere you like. Free play has no maths.';$('feedback').className='feedback';return;}if(!current)return;const p=current.problem,s=p.steps[current.stepIndex];$('feedback').textContent=state.equations?`Try this clue: ${equation()}`:`Count what you started with, then ${s.op==='+'?'add':'take away'} ${s.amount}.`;$('feedback').className='feedback';}
+  function startFreePlay(){freePlay=true;$('activityTitle').textContent='Free play time';$('activityPrompt').textContent='Move your treasures and toys around. Nothing to solve here.';$('answerPanel').classList.add('hidden');$('feedback').textContent='';const toys=(state.treasures.length?state.treasures:['🧸','⚽','🎈','🪁']).slice(-6);$('activityArea').innerHTML=`<div id="freeCanvas" class="freeplay"><div class="freeplay-note">Drag things around — this part is just for fun.</div></div>`;const c=$('freeCanvas');toys.forEach((e,i)=>{const t=token(e,'free');t.style.left=(12+(i%3)*27)+'%';t.style.top=(15+Math.floor(i/3)*38)+'%';t.addEventListener('pointerdown',freeDrag);c.appendChild(t);});}
+  function freeDrag(ev){const el=ev.currentTarget,c=$('freeCanvas'),r=c.getBoundingClientRect(),startX=ev.clientX,startY=ev.clientY,startL=parseFloat(el.style.left),startT=parseFloat(el.style.top);el.setPointerCapture?.(ev.pointerId);const move=e=>{const dx=(e.clientX-startX)/r.width*100,dy=(e.clientY-startY)/r.height*100;el.style.left=clamp(startL+dx,0,88)+'%';el.style.top=clamp(startT+dy,0,82)+'%';};const up=()=>{el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',up);};el.addEventListener('pointermove',move);el.addEventListener('pointerup',up);}
+
+  function openTreasure(){if(!$('treasureReveal').classList.contains('hidden'))return;ensureAudio();let options=treasures.filter(t=>!state.treasures.includes(t));if(!options.length)options=treasures;const prize=pick(options);state.treasures.push(prize);state.coins+=10;state.adventures++;save();treasureSound();sparks();$('treasureReveal').textContent=`${prize}  +10 🪙`;$('treasureReveal').classList.remove('hidden');$('treasureWorldBtn').classList.remove('hidden');$('treasureChest').textContent='🎊';}
+  function treasureBack(){state.tasks={home:false,shop:false,park:false};save();$('treasureReveal').classList.add('hidden');$('treasureWorldBtn').classList.add('hidden');$('treasureChest').textContent='🎁';world();}
+
+  function syncSettings(){$('soundToggle').classList.toggle('on',state.sound);$('adaptiveToggle').classList.toggle('on',state.adaptive);$('equationToggle').classList.toggle('on',state.equations);$('levelSelect').value=String(state.level);$('levelDescription').textContent=levelText();}
+  function toggle(key,id){state[key]=!state[key];$(id).classList.toggle('on',state[key]);save();}
+
+  document.querySelectorAll('.place-card').forEach(b=>b.onclick=()=>enterRoom(b.dataset.room));
+  $('worldBtn').onclick=world;$('backToWorld').onclick=world;$('newAdventureBtn').onclick=newAdventure;$('shuffleActivityBtn').onclick=()=>{freePlay=false;startActivity(room)};$('freePlayBtn').onclick=startFreePlay;$('helpBtn').onclick=showHelp;
+  $('treasureChest').onclick=openTreasure;$('treasureWorldBtn').onclick=treasureBack;
+  $('settingsBtn').onclick=()=>{syncSettings();show('settingsScreen')};$('settingsClose').onclick=world;
+  $('soundToggle').onclick=()=>toggle('sound','soundToggle');$('adaptiveToggle').onclick=()=>toggle('adaptive','adaptiveToggle');$('equationToggle').onclick=()=>toggle('equations','equationToggle');
+  $('levelSelect').onchange=e=>{state.level=Number(e.target.value);state.recent=[];save();syncSettings();};
+  $('resetBtn').onclick=()=>{if(confirm('Reset Mia’s whole world?')){state={...defaults,tasks:{home:false,shop:false,park:false},lastActivities:{},adventureSeed:Date.now()};save();syncSettings();world();}};
+
+  updateHud();
+  if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=4').then(r=>r.update()).catch(()=>{}));}
 })();

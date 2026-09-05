@@ -3,85 +3,99 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <meta name="theme-color" content="#3f6fd9" />
+  <meta name="theme-color" content="#76c6ff" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Math Quest" />
-  <meta name="math-quest-version" content="3.2" />
-  <link rel="manifest" href="manifest.json" />
+  <meta name="apple-mobile-web-app-title" content="Mia's World" />
+  <link rel="manifest" href="manifest.json?v=4" />
   <link rel="apple-touch-icon" href="icon-192.png" />
-  <title>Math Quest · Playground Adventure</title>
-  <link rel="stylesheet" href="styles.css?v=3.2" />
+  <title>Mia's Playground World</title>
+  <link rel="stylesheet" href="styles.css?v=4" />
 </head>
 <body>
-<div class="app">
-  <header>
-    <div class="brand"><div class="orb">🗺️</div><span>Math Quest</span></div>
-    <button class="iconbtn" id="settingsBtn" aria-label="Parent settings">⚙︎</button>
+<div id="app" class="app">
+  <header class="topbar">
+    <button id="worldBtn" class="brand-btn" aria-label="World map"><span>🌈</span><strong>Mia's World</strong></button>
+    <div class="hud"><span id="coinHud">🪙 0</span><span id="adventureHud">🗺️ 0/3</span><button id="settingsBtn" class="icon-btn" aria-label="Parent settings">⚙︎</button></div>
   </header>
+
   <main>
-    <section class="screen active" id="homeScreen">
-      <div class="hero">
+    <section id="worldScreen" class="screen active">
+      <div class="world-hero">
         <div>
-          <h1>Playground<br>Adventure</h1>
-          <p>Help Mia reach the playground picnic. Every little problem moves the journey forward.</p>
-          <div class="mission-card"><strong>Today’s mission</strong><span>Leave home, stop at the candy shop, catch the bus, cross the park and reach the playground treasure.</span></div>
-          <div class="actions"><button class="primary" id="startBtn">Start the Mission</button></div>
-          <div class="stats"><span class="pill" id="homeLevel">Level 1</span><span class="pill" id="homeBadges">🏅 0 missions</span><span class="pill" id="homeAccuracy">No missions yet</span></div>
+          <div class="eyebrow">MIA'S PLAYGROUND WORLD</div>
+          <h1>What should we play today?</h1>
+          <p>Explore, move things, help friends and collect treasures. The maths stays hidden inside the play.</p>
+          <div class="adventure-card">
+            <div><strong id="adventureTitle">Today's adventure</strong><span id="adventureText">Complete one helpful job in each place to open the treasure chest.</span></div>
+            <button id="newAdventureBtn" class="small-btn">New adventure</button>
+          </div>
         </div>
-        <div class="hero-art" aria-hidden="true">🧒🎒🛝</div>
+        <div class="world-art">🧒🎒 🍭 🛝</div>
+      </div>
+
+      <div class="map-grid">
+        <button class="place-card home" data-room="home">
+          <div class="place-scene">🏠</div><div><strong>Home</strong><span>Pack, tidy & decorate</span></div><b id="homeTaskMark">○</b>
+        </button>
+        <button class="place-card shop" data-room="shop">
+          <div class="place-scene">🍭</div><div><strong>Candy Shop</strong><span>Choose, share & pay</span></div><b id="shopTaskMark">○</b>
+        </button>
+        <button class="place-card park" data-room="park">
+          <div class="place-scene">🛝</div><div><strong>Playground</strong><span>Score, share & picnic</span></div><b id="parkTaskMark">○</b>
+        </button>
+      </div>
+
+      <div class="collection-panel">
+        <div><strong>Your collection</strong><span>Adventure treasures stay in your world.</span></div>
+        <div id="collection" class="collection"></div>
       </div>
     </section>
 
-    <section class="screen" id="gameScreen">
-      <div class="journey" id="journey"></div>
-      <div class="game-top"><div class="progress"><div id="progressBar"></div></div><div class="score" id="scoreText">🧩 0</div></div>
-      <div class="level-tag" id="levelTag">Level 1 · Two-Digit Builder</div>
-      <div class="story-wrap">
-        <div class="scene" id="scene">🍬</div>
-        <div class="story-card">
-          <div class="story-title" id="storyTitle">Candy Shop</div>
-          <div class="story" id="story">Mia has 14 candies and gives 5 to her friends.</div>
-          <div class="ask" id="ask">How many candies are left?</div>
+    <section id="roomScreen" class="screen">
+      <div class="room-head">
+        <button id="backToWorld" class="back-btn">← World</button>
+        <div><div id="roomName" class="eyebrow">HOME</div><h2 id="roomTitle">Home</h2></div>
+        <button id="shuffleActivityBtn" class="small-btn">Another game</button>
+      </div>
+      <div id="roomScene" class="room-scene"></div>
+      <div class="activity-shell">
+        <div class="character-row"><div id="character" class="character">🧒</div><div class="speech"><strong id="activityTitle">Let's play!</strong><span id="activityPrompt"></span></div></div>
+        <div id="activityArea" class="activity-area"></div>
+        <div id="answerPanel" class="answer-panel hidden">
+          <div><strong id="answerQuestion">How many now?</strong><span id="answerHintText"></span></div>
+          <div class="number-entry"><div id="answerDisplay" class="answer-display">?</div><div id="keypad" class="keypad"></div></div>
         </div>
-        <div class="hint" id="hint"><div class="hint-equation" id="hintEquation"></div><div class="objects" id="objects"></div></div>
-        <div class="answer-area">
-          <div class="timer" id="timer"></div>
-          <div class="answer-display empty" id="answerDisplay">Your answer</div>
-          <div class="keypad" id="keypad"></div>
-          <div class="actions" style="margin-top:10px"><button class="secondary" id="hintBtn">Show a hint</button></div>
-          <div class="feedback" id="feedback"></div>
-        </div>
+        <div id="feedback" class="feedback"></div>
+      </div>
+      <div class="room-actions">
+        <button id="freePlayBtn" class="secondary-btn">🎨 Free play</button>
+        <button id="helpBtn" class="secondary-btn">💡 Help</button>
       </div>
     </section>
 
-    <section class="screen" id="completeScreen">
-      <div class="complete">
-        <div class="big">🏆</div>
-        <div class="confetti">🎉 ✨ 🎉</div>
-        <h2>You reached the playground!</h2>
-        <div class="badge">🏅 Playground Helper badge</div>
-        <p id="completeText">Mission complete.</p>
-        <div class="actions"><button class="primary" id="againBtn">Play Another Mission</button><button class="secondary" id="homeBtn">Home</button></div>
+    <section id="treasureScreen" class="screen">
+      <div class="treasure-wrap">
+        <div class="treasure-chest" id="treasureChest">🎁</div>
+        <h2>Adventure complete!</h2>
+        <p>You helped in all three places. Tap the treasure to open it.</p>
+        <div id="treasureReveal" class="treasure-reveal hidden"></div>
+        <button id="treasureWorldBtn" class="primary-btn hidden">Back to my world</button>
       </div>
     </section>
 
-    <section class="screen" id="settingsScreen">
-      <div class="panel">
-        <h2>Parent settings</h2>
-        <div class="row"><div><label>Celebration sounds</label><small>Short happy tones for correct answers and mission completion.</small></div><button class="toggle on" id="soundToggle"></button></div>
-        <div class="row"><div><label>Addition</label><small>Addition stories change with each level.</small></div><button class="toggle on" id="addToggle"></button></div>
-        <div class="row"><div><label>Subtraction</label><small>Subtraction stories never use negative answers.</small></div><button class="toggle on" id="subToggle"></button></div>
-        <div class="row"><div><label>Adaptive difficulty</label><small>The next mission gets harder or easier from recent performance.</small></div><button class="toggle on" id="adaptiveToggle"></button></div>
-        <div class="row"><div><label>Timer</label><small>Off is recommended while confidence is developing.</small></div><select id="timerSelect"><option value="0">Off</option><option value="20">20 seconds</option><option value="15">15 seconds</option><option value="10">10 seconds</option></select></div>
-        <div class="row"><div><label>Problems per mission</label><small>8 gives a short but complete journey.</small></div><select id="roundSelect"><option value="6">6</option><option value="8" selected>8</option><option value="10">10</option></select></div>
-        <div class="row"><div><label>Reset progress</label><small>Starts again from Level 1.</small></div><button class="secondary" id="resetBtn">Reset</button></div>
+    <section id="settingsScreen" class="screen">
+      <div class="settings-panel">
+        <div class="settings-title"><div><div class="eyebrow">PARENT AREA</div><h2>Settings</h2></div><button id="settingsClose" class="icon-btn">✕</button></div>
+        <div class="setting-row"><div><strong>Celebration sounds</strong><span>Gentle success and treasure sounds.</span></div><button id="soundToggle" class="toggle on"></button></div>
+        <div class="setting-row"><div><strong>Adaptive maths</strong><span>Difficulty quietly changes from performance.</span></div><button id="adaptiveToggle" class="toggle on"></button></div>
+        <div class="setting-row"><div><strong>Show equations in help</strong><span>Only reveal formal maths when a hint is requested.</span></div><button id="equationToggle" class="toggle on"></button></div>
+        <div class="setting-row"><div><strong>Current maths stage</strong><span id="levelDescription">Two-digit ± single-digit</span></div><select id="levelSelect"><option value="1">Stage 1</option><option value="2">Stage 2</option><option value="3">Stage 3</option></select></div>
+        <div class="setting-row"><div><strong>Reset world</strong><span>Clears coins, treasures and learning progress.</span></div><button id="resetBtn" class="small-btn danger">Reset</button></div>
       </div>
-      <div class="actions"><button class="primary" id="saveSettingsBtn">Save & Return</button></div>
-      <div class="tiny">Progress stays on this device only. No login, tracking or cloud account is used.</div>
     </section>
   </main>
 </div>
-<script src="app.js?v=3.2"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

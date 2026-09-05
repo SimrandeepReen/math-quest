@@ -1,12 +1,12 @@
 {
-  "name": "Math Quest – Playground Adventure",
-  "short_name": "Math Quest",
-  "start_url": "./",
+  "name": "Mia's Playground World",
+  "short_name": "Mia's World",
+  "start_url": "./?v=4",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#eaf4ff",
-  "theme_color": "#3f6fd9",
-  "description": "A story-driven adaptive maths adventure for children.",
+  "background_color": "#dff5ff",
+  "theme_color": "#76c6ff",
+  "description": "A playful adaptive maths world for children.",
   "icons": [
     {"src":"icon-192.png","sizes":"192x192","type":"image/png"},
     {"src":"icon-512.png","sizes":"512x512","type":"image/png"}
