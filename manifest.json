@@ -1,11 +1,12 @@
 {
-  "name": "Math Quest",
+  "name": "Math Quest – Playground Adventure",
   "short_name": "Math Quest",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#eef0ff",
-  "theme_color": "#5b57d9",
-  "description": "An adaptive addition and subtraction game for children.",
+  "background_color": "#eaf4ff",
+  "theme_color": "#3f6fd9",
+  "description": "A story-driven adaptive maths adventure for children.",
   "icons": [
     {"src":"icon-192.png","sizes":"192x192","type":"image/png"},
     {"src":"icon-512.png","sizes":"512x512","type":"image/png"}
