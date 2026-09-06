@@ -8,7 +8,7 @@ export class Actor extends Phaser.GameObjects.Container {
   this.torso=scene.add.image(0,-85,`body${variant}`).setDisplaySize(83,90);this.add(this.torso);
   for(const pos of [-42,42]){const arm=scene.add.image(pos,-122,`arm${variant}`).setOrigin(.5,.1).setDisplaySize(28,76);this.arms.push(arm);this.add(arm);}
   this.head=scene.add.image(0,-174,`head${variant}`).setDisplaySize(145,135);this.add(this.head);
-  this.setSize(155,245);this.setInteractive(new Phaser.Geom.Rectangle(-78,-245,155,248),Phaser.Geom.Rectangle.Contains);
+  this.setSize(155,245);this.setInteractive(new Phaser.Geom.Rectangle(-.5,-122.5,155,248),Phaser.Geom.Rectangle.Contains);
   this.on('pointerdown',()=>{if(isMia)this.celebrate();else{this.wave();audio.play('bird');}});
   scene.tweens.add({targets:this.head,y:-171,duration:1500+variant*130,yoyo:true,repeat:-1,ease:'Sine.InOut'});
   scene.time.addEvent({delay:3100+variant*970,loop:true,callback:()=>{if(this.active&&!this.walking){scene.tweens.add({targets:this.head,scaleY:this.head.scaleY*.96,duration:80,yoyo:true});}}});

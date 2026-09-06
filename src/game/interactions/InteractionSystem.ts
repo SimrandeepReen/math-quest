@@ -7,7 +7,12 @@ export class InteractionSystem {
  constructor(private scene:Phaser.Scene){scene.input.dragDistanceThreshold=8;scene.events.once('shutdown',()=>{this.zones=[];});}
  zone(zone:DropZone){this.zones.push(zone);return zone;}
  draggable(object:Movable,kind:string,options:{source?:boolean;onPlace?:(x:number,y:number)=>void;onStart?:()=>void;bounds?:Phaser.Geom.Rectangle;tap?:()=>void}={}){
-  if(!object.input)object.setInteractive({useHandCursor:true});this.scene.input.setDraggable(object);object.setData('kind',kind);
+  if(!object.input){
+   if(object instanceof Phaser.GameObjects.Image){
+    const w=Math.max(object.width,68/Math.abs(object.scaleX)),h=Math.max(object.height,68/Math.abs(object.scaleY));
+    object.setInteractive(new Phaser.Geom.Rectangle((object.width-w)/2,(object.height-h)/2,w,h),Phaser.Geom.Rectangle.Contains);
+   }else object.setInteractive({useHandCursor:true});
+  }this.scene.input.setDraggable(object);object.setData('kind',kind);
   let homeX=object.x,homeY=object.y,depth=object.depth,sx=object.scaleX,sy=object.scaleY,moved=false;
   object.on('pointerdown',()=>{moved=false;});
   object.on('pointerup',()=>{if(!moved)options.tap?.();});
@@ -16,7 +21,7 @@ export class InteractionSystem {
   object.on('dragend',(pointer:Phaser.Input.Pointer)=>{
    this.dragging=false;for(const zone of this.zones)zone.highlight?.setAlpha(0);
    const zone=[...this.zones].reverse().find(z=>z.accepts(kind)&&z.bounds().contains(pointer.x,pointer.y));
-   const accepted=zone?.drop(object,kind)??false;if(!object.active)return;
+   const accepted=zone?.drop(object,kind)??false;if(!object.active||(accepted&&object.input?.enabled===false))return;
    let x=object.x,y=object.y;
    if(options.source || (!accepted&&!options.onPlace)){x=homeX;y=homeY;}
    else if(options.bounds){x=Phaser.Math.Clamp(x,options.bounds.left,options.bounds.right);y=Phaser.Math.Clamp(y,options.bounds.top,options.bounds.bottom);}

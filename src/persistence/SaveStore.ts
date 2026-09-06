@@ -11,7 +11,8 @@ export function migrate(input:unknown):SaveData {
   const base=defaults();if(!input||typeof input!=='object') return base;
   const raw=input as Record<string,any>;
   if(raw.schema>5)throw new Error('This save belongs to a newer release. Reconnect to update the game.');
-  for(const key of ['coins','earned','served','goals','visits','shopStyle','updatedAt'] as const)base[key]=number(raw[key],base[key]);
+  for(const key of ['coins','earned','served','goals','visits','shopStyle'] as const)base[key]=number(raw[key],base[key]);
+  base.updatedAt=number(raw.updatedAt,base.updatedAt,Number.MAX_SAFE_INTEGER);
   base.unlocked=Array.isArray(raw.unlocked)?[...new Set(['plush',...raw.unlocked.filter((v:unknown)=>typeof v==='string')])]:base.unlocked;
   base.accessory=['none','bow','hat'].includes(raw.accessory)?raw.accessory:'none';
   if(['Shop','Playground','Room'].includes(raw.location))base.location=raw.location;
