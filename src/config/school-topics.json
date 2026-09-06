@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "math": { "addition_to_20": true, "subtraction_to_20": true, "crossing_ten_addition": true, "crossing_ten_subtraction": true, "inverse_relationships": true, "mixed_expressions": true, "multiplication": false, "division": false, "money": false, "time": false, "geometry": false, "measurement": false, "fractions": false },
+  "german": { "vocabulary": false, "articles": false, "plurals": false, "spelling": false, "reading": false, "sentences": false },
+  "english": { "spelling": false, "vocabulary": false, "reading": false }
+}
