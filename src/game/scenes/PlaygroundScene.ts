@@ -30,11 +30,11 @@ export class PlaygroundScene extends WorldScene {
  }
  private preview(){this.aim.clear();const sim=this.aimedLaunch();for(let i=0;i<30;i++){advance(sim,.055);if(sim.y>780)break;this.aim.fillStyle(0xfff7d7,1-i/36).fillCircle(sim.x,sim.y,Math.max(3,6-i*.12));}this.ball.setAngle(this.dx*.07);}
  private resetBall(){this.flight=null;this.draggingBall=false;this.aim.clear();this.ball.setPosition(this.origin.x,this.origin.y).setAngle(0).setDisplaySize(106,106);this.shadow.setPosition(this.origin.x,750).setScale(1);}
- update(time:number,delta:number){super.update(time);if(!this.flight)return;const ball=this.flight;let remaining=Math.min(delta/1000,.05);while(remaining>0){const dt=Math.min(remaining,1/120);remaining-=dt;this.previous={...ball};advance(ball,dt);
+ update(time:number,delta:number){super.update(time);if(!this.flight)return;const ball=this.flight;const elapsed=Math.min(delta/1000,.15);let remaining=elapsed;while(remaining>0){const dt=Math.min(remaining,1/120);remaining-=dt;this.previous={...ball};advance(ball,dt);
    if(!this.scoredShot&&scored(this.previous,ball,this.hoop.x,this.hoop.y)){this.scoredShot=true;this.score++;this.scoreText.setText(String(this.score));pop(this,this.scoreText);this.reward('basket',this.hoop.x,this.hoop.y);if(this.score>=this.goal){this.goal=this.score+3+Math.floor(Math.random()*3);this.targetText.setText(`Lovely! Next picnic goal: ${this.goal}`);this.say('Swish! Your world has a new coin.');burst(this,760,180,14);}}
    if(ball.y>742&&ball.vy>0){ball.y=742;ball.vy*=-.56;ball.vx*=.72;this.floorBounces++;audio.play('bounce');}
   }
-  this.flightTime+=delta;this.ball.setPosition(ball.x,ball.y);this.ball.angle+=ball.vx*delta*.0003;this.shadow.setPosition(Phaser.Math.Clamp(ball.x,40,1400),750).setScale(Phaser.Math.Clamp(1-(742-ball.y)/1000,.25,1));
+  this.flightTime+=elapsed*1000;this.ball.setPosition(ball.x,ball.y);this.ball.angle+=ball.vx*delta*.0003;this.shadow.setPosition(Phaser.Math.Clamp(ball.x,40,1400),750).setScale(Phaser.Math.Clamp(1-(742-ball.y)/1000,.25,1));
   if(this.flightTime>4600||ball.x>1500||ball.x< -100||this.floorBounces>=3){if(!this.scoredShot)this.say('Another toss? Follow the dots.',undefined,1700);this.resetBall();}
  }
  snapshot(){return{...super.snapshot(),miniGame:'basketball',activeRound:this.activeRound,score:this.score,target:this.goal,ball:{x:this.ball.x,y:this.ball.y},flying:!!this.flight};}

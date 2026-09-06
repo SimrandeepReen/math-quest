@@ -49,5 +49,5 @@ export class ShopScene extends WorldScene {
   this.serving=true;const dish=this.dish;this.dish=undefined;dish.disableInteractive();this.reward('serve',1243,520);this.tweens.add({targets:dish,x:1240,y:590,scale:.6,alpha:0,duration:650,onComplete:()=>dish.destroy()});this.customer?.celebrate();this.say('Yum! More coins for your little world.');this.depart();return true;}
  private depart(){this.serving=true;this.orderBubble?.destroy();this.time.delayedCall(900,()=>this.customer?.walkTo(1510,700));this.time.delayedCall(3400,()=>this.arrive());}
  protected onSettings(){if(!this.berry)this.arrive();}
- snapshot(){return{...super.snapshot(),freezerOpen:this.freezerOpen,vessel:this.vessel,scoops:[...this.scoops],toppings:[...this.toppings],order:this.order,berry:this.berry?.snapshot()||null};}
+ snapshot(){return{...super.snapshot(),freezerOpen:this.freezerOpen,serving:this.serving,hasDish:!!this.dish,vessel:this.vessel,scoops:[...this.scoops],toppings:[...this.toppings],order:this.order,berry:this.berry?.snapshot()||null};}
 }
